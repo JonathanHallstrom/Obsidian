@@ -45,6 +45,23 @@ namespace NNUE {
   constexpr int NetworkQA = 255;
   constexpr int NetworkQB = 128;
 
+  struct Net {
+    alignas(64) int16_t FeatureWeights[KingBuckets][2][6][64][L1];
+    alignas(64) int16_t FeatureBiases[L1];
+
+    union {
+      alignas(64) int8_t L1Weights[OutputBuckets][L1][L2];
+      alignas(64) int8_t L1WeightsAlt[OutputBuckets][L1 * L2];
+    };
+    alignas(64) float L1Biases[OutputBuckets][L2];
+
+    alignas(64) float L2Weights[OutputBuckets][L2 * 2][L3];
+    alignas(64) float L2Biases[OutputBuckets][L3];
+
+    alignas(64) float L3Weights[OutputBuckets][L3];
+    alignas(64) float L3Biases[OutputBuckets];
+  };
+
   struct Accumulator {
     
     alignas(Alignment) int16_t colors[COLOR_NB][L1];

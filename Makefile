@@ -5,6 +5,7 @@ else
 endif
 
 DEFAULT_NET = net89perm.bin
+PROCESSED_NET = processed.bin
 
 ifndef EVALFILE
 	EVALFILE = $(DEFAULT_NET)
@@ -24,7 +25,7 @@ OBJS := $(OBJS:.c=.o)
 
 OPTIMIZE = -O3 -fno-stack-protector -fno-math-errno -funroll-loops -fno-exceptions -flto -flto-partition=one
 
-FLAGS = -s -pthread -std=c++17 -DNDEBUG -DEvalFile=\"$(EVALFILE)\" $(OPTIMIZE)
+FLAGS = -s -pthread -std=c++17 -DNDEBUG -DEvalFile=\"$(PROCESSED_NET)\" $(OPTIMIZE)
 
 ifeq ($(OS),Windows_NT)
 	FLAGS += -static
@@ -71,7 +72,7 @@ endif
 %.o: %.c
 	gcc $(FLAGS) -c $< -o $@
 
-make: download-net $(FILES)
+make: $(PROCESSED_NET) $(FILES)
 	g++ $(FLAGS) $(FILES) -o $(EXE) -fprofile-generate="obs_pgo"
 ifeq ($(OS),Windows_NT)
 	$(EXE) bench
@@ -85,11 +86,19 @@ else
 	rm -rf obs_pgo
 endif
 
-nopgo: download-net $(OBJS)
+nopgo: $(PROCESSED_NET) $(OBJS)
 	g++ $(FLAGS) $(OBJS) -o $(EXE)
 
+tools/process_net: tools/process_net.cpp
+	g++ $(FLAGS) tools/process_net.cpp -o tools/process_net
+
+$(PROCESSED_NET): tools/process_net | download-net
+	./tools/process_net $(EVALFILE) $(PROCESSED_NET)
+
+src/nnue.o: $(PROCESSED_NET)
+
 clean:
-	rm -f $(OBJS)
+	rm -f $(OBJS) $(PROCESSED_NET) tools/process_net
 	
 download-net:
 ifdef DOWNLOAD_NET

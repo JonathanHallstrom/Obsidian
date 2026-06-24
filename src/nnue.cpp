@@ -20,23 +20,6 @@ namespace NNUE {
 
   constexpr int FtShift = 9;
 
-  struct Net {
-    alignas(64) int16_t FeatureWeights[KingBuckets][2][6][64][L1];
-    alignas(64) int16_t FeatureBiases[L1];
-
-    union {
-      alignas(64) int8_t L1Weights[OutputBuckets][L1][L2];
-      alignas(64) int8_t L1WeightsAlt[OutputBuckets][L1 * L2];
-    }; 
-    alignas(64) float L1Biases[OutputBuckets][L2];
-
-    alignas(64) float L2Weights[OutputBuckets][L2 * 2][L3];
-    alignas(64) float L2Biases[OutputBuckets][L3];
-
-    alignas(64) float L3Weights[OutputBuckets][L3];
-    alignas(64) float L3Biases[OutputBuckets];
-  };
-
   Net* Weights;
 
   // For every possible uint16 number, store the count of active bits,
@@ -160,56 +143,15 @@ namespace NNUE {
   }
 
   void loadWeights() {
-    
-    Weights = (Net*) Util::allocAlign(sizeof(Net));
-    
-    // dpbusd preprocessing:
-    Net* rawContent = new Net();
-    memcpy(rawContent, gEmbeddedNNUEData, sizeof(Net));
-    memcpy(Weights, rawContent, sizeof(Net));
-    for (int bucket = 0; bucket < OutputBuckets; bucket++)
-      for (int i = 0; i < L1; i += 4)
-        for (int j = 0; j < L2; ++j)
-          for (int k = 0; k < 4; k ++)
-            Weights->L1WeightsAlt[bucket][i * L2
-            + j * 4
-            + k] = rawContent->L1Weights[bucket][i + k][j];
-    delete rawContent;
 
-    // Init NNZ table
+    Weights = (Net*) gEmbeddedNNUEData;
+
     memset(nnzTable, 0, sizeof(nnzTable));
     for (int i = 0; i < 256; i++) {
       int j = 0;
       Bitboard bits = i;
       while (bits)
         nnzTable[i][j++] = popLsb(bits);
-    }
-    
-    // Transpose weights so that we don't need to permute after packus, because
-    // it interleaves each 128 block from a and each 128 block from b, alternately.
-    // Instead we want it to concatenate a and b
-
-    constexpr int weightsPerBlock = sizeof(__m128i) / sizeof(int16_t);
-    constexpr int NumRegs = sizeof(VecI) / 8;
-    __m128i regs[NumRegs];
-
-    __m128i* ftWeights = (__m128i*) Weights->FeatureWeights;
-    __m128i* ftBiases = (__m128i*) Weights->FeatureBiases;
-
-    for (int i = 0; i < KingBuckets * 768 * L1 / weightsPerBlock; i += NumRegs) {
-      for (int j = 0; j < NumRegs; j++)
-            regs[j] = ftWeights[i + j];
-
-        for (int j = 0; j < NumRegs; j++)
-            ftWeights[i + j] = regs[PackusOrder[j]];
-    }
-
-    for (int i = 0; i < L1 / weightsPerBlock; i += NumRegs) {
-      for (int j = 0; j < NumRegs; j++)
-            regs[j] = ftBiases[i + j];
-
-        for (int j = 0; j < NumRegs; j++)
-            ftBiases[i + j] = regs[PackusOrder[j]];
     }
   }
 
